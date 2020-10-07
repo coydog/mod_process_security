@@ -381,10 +381,14 @@ static int process_security_set_cap(request_rec *r)
   gid = r->finfo.group;
   uid = r->finfo.user;
 
-  if (!conf->root_enable && (uid == 0 || gid == 0)) {
-    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "%s NOTICE %s: permission of %s is root, can't run the file",
-                 MODULE_NAME, __func__, r->filename);
-    return -1;
+  if (uid == 0 || gid == 0) {
+    if (!conf->root_enable) {
+      ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL, "%s NOTICE %s: permission of %s is root, can't run the file",
+                   MODULE_NAME, __func__, r->filename);
+      return -1;
+    }
+    gid = conf->default_gid;
+    uid = conf->default_uid;
   }
 
   if (uid < conf->min_uid || gid < conf->min_gid) {
