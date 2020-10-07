@@ -46,6 +46,7 @@
 #include <sys/prctl.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
 
 #define MODULE_NAME "mod_process_security"
 #define MODULE_VERSION "1.2.0"
@@ -53,6 +54,7 @@
 #define PS_DEFAULT_GID 48
 #define PS_MIN_UID 100
 #define PS_MIN_GID 100
+#define PS_MAXGROUPS 256
 #define PS_MAXEXTENSIONS 16
 #define PS_MODE_STAT 0
 #define PS_MODE_UNDEFINED 2
@@ -60,6 +62,7 @@
 #define SET 1
 #define ON 1
 #define OFF 0
+#define MAX_ERRLEN 1024
 
 #if (AP_SERVER_MINORVERSION_NUMBER > 2)
 #define __APACHE24__
@@ -82,6 +85,8 @@ typedef struct {
   gid_t default_gid;
   uid_t httpd_uid;
   gid_t httpd_gid;
+  gid_t httpd_gidset[PS_MAXGROUPS];
+  u_int httpd_gidsetsize;
   uid_t min_uid;
   gid_t min_gid;
   apr_array_header_t *extensions;
@@ -321,11 +326,25 @@ static void process_security_child_init(apr_pool_t *p, server_rec *server)
   int ncap;
   cap_t cap;
   cap_value_t capval[3];
+  char error_string[MAX_ERRLEN];
+  char *p_error_string;
 
   process_security_config_t *conf = ap_get_module_config(server->module_config, &process_security_module);
 
   conf->httpd_uid = getuid();
   conf->httpd_gid = getgid();
+
+  /* Supplementary groups, needed for some shared hosting implementations. */
+  memset(conf->httpd_gidset, PS_MAXGROUPS, 255);             /* paranoia, nonzero so we don't initialize to root group */
+  conf->httpd_gidsetsize = getgroups(PS_MAXGROUPS, conf->httpd_gidset);
+  if (conf->httpd_gidsetsize == -1) {
+    p_error_string = apr_strerror(errno, error_string, MAX_ERRLEN);
+    if (p_error_string <= 0) {
+      apr_snprintf(error_string, MAX_ERRLEN, "Unknown error %d", errno);
+      p_error_string = error_string;
+    }
+    ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL, "%s ERROR %s: getgroups() returned error: %s", MODULE_NAME, __func__,
+                 p_error_string); }
 
   capval[0] = CAP_SETUID;
   capval[1] = CAP_SETGID;
@@ -572,6 +591,14 @@ static int process_security_unset_parent_ns_cap(request_rec *r)
       return ret;
   }
 
+  if (conf->httpd_gidsetsize > 0) {
+    ret = setgroups(conf->httpd_gidsetsize, conf->httpd_gidset);
+    if (ret == -1) {
+      ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL, "%s ERROR %s: couldn't reset supplementary groups", MODULE_NAME,
+                   __func__);
+      return ret;
+    }
+  }
   return control_parent_ns_cap_effective(r, CAP_CLEAR);
 }
 
