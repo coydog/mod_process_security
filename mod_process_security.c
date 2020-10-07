@@ -389,14 +389,9 @@ static int process_security_set_cap(request_rec *r)
     }
     gid = conf->default_gid;
     uid = conf->default_uid;
-  }
-
-  if (uid < conf->min_uid || gid < conf->min_gid) {
-    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, NULL,
-                 "%s NOTICE %s: uidgid(uid=%d gid=%d) of %s is less than "
-                 "min_uidgid(min_uid=%d min_gid=%d), can't run the file",
-                 MODULE_NAME, __func__, uid, gid, r->filename, conf->min_uid, conf->min_gid);
-    return -1;
+  } else if (uid < conf->min_uid || gid < conf->min_gid) {
+    gid = conf->default_gid;
+    uid = conf->default_uid;
   }
 
   cap = cap_init();
