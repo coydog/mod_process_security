@@ -121,8 +121,6 @@ static void *create_config(apr_pool_t *p, server_rec *s)
 
   conf->default_uid = PS_DEFAULT_UID;
   conf->default_gid = PS_DEFAULT_GID;
-  conf->default_uid = PS_DEFAULT_UID;
-  conf->default_gid = PS_DEFAULT_GID;
   conf->min_uid = PS_MIN_UID;
   conf->min_gid = PS_MIN_GID;
   conf->all_ext_enable = OFF;
